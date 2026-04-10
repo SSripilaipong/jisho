@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
+	"github.com/shsnail/jisho/internal/query"
 )
 
 var dbPath string
@@ -16,6 +19,12 @@ var rootCmd = &cobra.Command{
 	Use:   "jisho",
 	Short: "Offline Japanese dictionary",
 	Long:  "jisho — offline Japanese dictionary CLI backed by JMdict/Kanjidic.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			return runREPLWithQuerier(cmd.Context(), query.New(db))
+		}
+		return cmd.Help()
+	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// update command opens its own DB, skip here.
 		if cmd.Name() == "update" {
