@@ -1,0 +1,4 @@
+jisho
+dist/
+*.db
+*.db.tmp
