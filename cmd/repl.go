@@ -266,7 +266,7 @@ func paginate(total int, printPage func(start, end int)) error {
 		if end >= total {
 			break
 		}
-		fmt.Fprintf(os.Stdout, "  ─── %d of %d ── any key for more, q to stop ─── ", end, total)
+		fmt.Fprintf(os.Stdout, "  ─── %d of %d ── n for more, any other key to stop ─── ", end, total)
 		if stop := readKey(); stop {
 			fmt.Fprintln(os.Stdout)
 			break
@@ -284,12 +284,12 @@ func readKey() bool {
 		// Can't go raw (e.g. not a TTY); fall back to line read.
 		var line string
 		fmt.Scanln(&line)
-		return strings.ToLower(strings.TrimSpace(line)) == "q"
+		return strings.ToLower(strings.TrimSpace(line)) != "n"
 	}
 	defer term.Restore(fd, old)
 	var buf [1]byte
 	os.Stdin.Read(buf[:])
 	b := buf[0]
-	// q/Q, Ctrl-C, Ctrl-D, or Escape → stop
-	return b == 'q' || b == 'Q' || b == 3 || b == 4 || b == 27
+	// Only 'n'/'N' continues; everything else (including Ctrl-C, Ctrl-D, Escape) stops.
+	return b != 'n' && b != 'N'
 }

@@ -29,6 +29,13 @@ func toHiragana(s string) string {
 			}
 		}
 		if !matched {
+			// Doubled consonant (e.g. "kk", "tt") → っ + continue.
+			// "nn" is already in the map, so exclude 'n' here.
+			if i+1 < n && runes[i] == runes[i+1] && runes[i] != 'n' {
+				out = append(out, []rune("っ")...)
+				i++
+				continue
+			}
 			// Non-romaji character encountered — give up.
 			return ""
 		}
