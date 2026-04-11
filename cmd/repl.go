@@ -34,7 +34,7 @@ func init() {
 const replPageSize = 5
 
 var replCompleter = readline.NewPrefixCompleter(
-	readline.PcItem("search",
+	readline.PcItem("/search",
 		readline.PcItem("--common"),
 		readline.PcItem("--jlpt",
 			readline.PcItem("n1"),
@@ -44,12 +44,21 @@ var replCompleter = readline.NewPrefixCompleter(
 			readline.PcItem("n5"),
 		),
 	),
-	readline.PcItem("kanji"),
-	readline.PcItem("name"),
-	readline.PcItem("radical"),
-	readline.PcItem("help"),
-	readline.PcItem("exit"),
-	readline.PcItem("quit"),
+	readline.PcItem("/kanji"),
+	readline.PcItem("/name"),
+	readline.PcItem("/radical"),
+	readline.PcItem("/help"),
+	readline.PcItem("/exit"),
+	readline.PcItem("/quit"),
+	readline.PcItem("/q"),
+	readline.PcItem("--common"),
+	readline.PcItem("--jlpt",
+		readline.PcItem("n1"),
+		readline.PcItem("n2"),
+		readline.PcItem("n3"),
+		readline.PcItem("n4"),
+		readline.PcItem("n5"),
+	),
 )
 
 func replHistoryPath() string {
@@ -74,7 +83,7 @@ func runREPLWithQuerier(ctx context.Context, q query.Querier) error {
 	}
 	defer rl.Close()
 
-	fmt.Fprintln(os.Stdout, "jisho interactive mode  (type 'help' for commands, Ctrl-D to quit)")
+	fmt.Fprintln(os.Stdout, "jisho interactive mode  (type a word to search, '/help' for commands, Ctrl-D to quit)")
 
 	for {
 		line, err := rl.Readline()
@@ -96,34 +105,38 @@ func runREPLWithQuerier(ctx context.Context, q query.Querier) error {
 }
 
 func replDispatch(ctx context.Context, rl *readline.Instance, q query.Querier, line string) error {
-	parts := strings.Fields(line)
-	if len(parts) == 0 {
+	if strings.HasPrefix(line, "/") {
+		parts := strings.Fields(line[1:])
+		if len(parts) == 0 {
+			return nil
+		}
+		cmd, args := parts[0], parts[1:]
+		switch strings.ToLower(cmd) {
+		case "search":
+			return replSearch(ctx, q, args)
+		case "kanji":
+			return replKanji(ctx, q, args)
+		case "name":
+			return replName(ctx, q, args)
+		case "radical":
+			return replRadical(ctx, q, args)
+		case "help":
+			replPrintHelp()
+		case "exit", "quit", "q":
+			rl.Close()
+			os.Exit(0)
+		default:
+			fmt.Fprintf(os.Stderr, "unknown command %q — type '/help' for usage\n", "/"+cmd)
+		}
 		return nil
 	}
-	cmd, args := parts[0], parts[1:]
-	switch strings.ToLower(cmd) {
-	case "search":
-		return replSearch(ctx, q, args)
-	case "kanji":
-		return replKanji(ctx, q, args)
-	case "name":
-		return replName(ctx, q, args)
-	case "radical":
-		return replRadical(ctx, q, args)
-	case "help":
-		replPrintHelp()
-	case "exit", "quit", "q":
-		rl.Close()
-		os.Exit(0)
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q — type 'help' for usage\n", cmd)
-	}
-	return nil
+	// Default: word search
+	return replSearch(ctx, q, strings.Fields(line))
 }
 
 func replSearch(ctx context.Context, q query.Querier, args []string) error {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: search [--jlpt n1-n5] [--common] <query>")
+		fmt.Fprintln(os.Stderr, "usage: /search [--jlpt n1-n5] [--common] <query>")
 		return nil
 	}
 
@@ -152,7 +165,7 @@ func replSearch(ctx context.Context, q query.Querier, args []string) error {
 	}
 
 	if len(queryParts) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: search [--jlpt n1-n5] [--common] <query>")
+		fmt.Fprintln(os.Stderr, "usage: /search [--jlpt n1-n5] [--common] <query>")
 		return nil
 	}
 
@@ -225,12 +238,15 @@ func replRadical(ctx context.Context, q query.Querier, args []string) error {
 
 func replPrintHelp() {
 	fmt.Print(`Commands:
-  search [--jlpt n1-n5] [--common] <query>   search words
-  kanji <character>                           look up a kanji
-  name <query>                                search names
-  radical <radical...>                        filter kanji by radicals
-  help                                        show this message
-  exit / quit                                 leave REPL
+  <query>                                      search words (default)
+  <query> --common                             search common words only
+  <query> --jlpt n1-n5                         search by JLPT level
+  /search [--jlpt n1-n5] [--common] <query>   explicit search with flags
+  /kanji <character>                           look up a kanji
+  /name <query>                                search names
+  /radical <radical...>                        filter kanji by radicals
+  /help                                        show this message
+  /exit  /quit  /q                             leave REPL
 `)
 }
 
@@ -266,7 +282,7 @@ func paginate(total int, printPage func(start, end int)) error {
 		if end >= total {
 			break
 		}
-		fmt.Fprintf(os.Stdout, "  ─── %d of %d ── n for more, any other key to stop ─── ", end, total)
+		fmt.Fprintf(os.Stdout, "\033[34m  ─── %d of %d ── n for more, any other key to stop ─── \033[0m", end, total)
 		if stop := readKey(); stop {
 			fmt.Fprintln(os.Stdout)
 			break
