@@ -28,7 +28,9 @@ Japanese/kana/romaji queries go through the `word_forms` table (B-tree LIKE), **
 
 - No `*` + Japanese input → `word_forms WHERE form LIKE 'query%'` (prefix, hits all kanji/kana forms including alternates like 喰べる for 食べる)
 - `*食べ` → reversed form column: `form_rev LIKE 'べ食%'`
-- ASCII input → romaji→hiragana/katakana conversion (`internal/query/romaji.go`), then kana LIKE, unioned with English FTS results
+- ASCII input → romaji→hiragana/katakana conversion (`internal/query/romaji.go`), then kana LIKE (`is_kana = 1`), unioned with English FTS results
+- `tabe*` (romaji prefix) → convert to kana → `form LIKE 'たべ%' OR form LIKE 'タベ%'` (`is_kana = 1`)
+- `*tabe` (romaji suffix) → convert to kana, reverse → `form_rev LIKE 'べた%' OR form_rev LIKE 'ベタ%'` (`is_kana = 1`)
 - English → `words_fts MATCH 'query*'` (FTS5 prefix, matches "to eat" and "eatery" for "eat")
 
 ## Database
