@@ -47,7 +47,24 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("search: %w", err)
 		}
-		output.PrintWords(os.Stdout, results)
+		names, err := querier.SearchNames(cmd.Context(), q)
+		if err != nil {
+			return fmt.Errorf("search names: %w", err)
+		}
+		if len(results) == 0 && len(names) == 0 {
+			fmt.Fprintln(os.Stdout, "No results found.")
+			return nil
+		}
+		if len(results) > 0 {
+			output.PrintWords(os.Stdout, results)
+		}
+		if len(names) > 0 {
+			if len(results) > 0 {
+				fmt.Fprintln(os.Stdout)
+			}
+			fmt.Fprintln(os.Stdout, "── Names ──")
+			output.PrintNames(os.Stdout, names)
+		}
 		return nil
 	},
 }

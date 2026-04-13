@@ -169,15 +169,20 @@ func replSearch(ctx context.Context, q query.Querier, args []string) error {
 		return nil
 	}
 
-	results, err := q.SearchWords(ctx, strings.Join(queryParts, " "), opts)
+	queryStr := strings.Join(queryParts, " ")
+	results, err := q.SearchWords(ctx, queryStr, opts)
 	if err != nil {
 		return fmt.Errorf("search: %w", err)
 	}
-	if len(results) == 0 {
+	names, err := q.SearchNames(ctx, queryStr)
+	if err != nil {
+		return fmt.Errorf("search names: %w", err)
+	}
+	if len(results) == 0 && len(names) == 0 {
 		fmt.Fprintln(os.Stdout, "No results found.")
 		return nil
 	}
-	return paginateWords(results)
+	return paginateCombined(results, names)
 }
 
 func replKanji(ctx context.Context, q query.Querier, args []string) error {
@@ -211,7 +216,8 @@ func replName(ctx context.Context, q query.Querier, args []string) error {
 		fmt.Fprintln(os.Stdout, "No results found.")
 		return nil
 	}
-	return paginateNames(results)
+	_, err = paginateNames(results)
+	return err
 }
 
 func replRadical(ctx context.Context, q query.Querier, args []string) error {
@@ -233,7 +239,8 @@ func replRadical(ctx context.Context, q query.Querier, args []string) error {
 		fmt.Fprintln(os.Stdout, "No kanji found.")
 		return nil
 	}
-	return paginateKanji(results)
+	_, err = paginateKanji(results)
+	return err
 }
 
 func replPrintHelp() {
@@ -250,29 +257,61 @@ func replPrintHelp() {
 `)
 }
 
-// paginateWords prints words in pages of replPageSize, prompting to continue.
-func paginateWords(items []model.Word) error {
-	return paginate(len(items), func(start, end int) {
-		output.PrintWords(os.Stdout, items[start:end])
-	})
+// paginateCombined paginates words followed by names as a single stream, so the
+// page size limit applies to the combined total rather than each section separately.
+func paginateCombined(words []model.Word, names []model.Name) error {
+	nw := len(words)
+	total := nw + len(names)
+	for offset := 0; offset < total; offset += replPageSize {
+		end := min(offset+replPageSize, total)
+		if offset > 0 {
+			fmt.Fprintln(os.Stdout)
+		}
+		wordEnd := min(end, nw)
+		if offset < wordEnd {
+			output.PrintWords(os.Stdout, words[offset:wordEnd])
+		}
+		nameStart := max(0, offset-nw)
+		nameEnd := max(0, end-nw)
+		if nameEnd > nameStart {
+			if nameStart == 0 {
+				if offset < wordEnd {
+					fmt.Fprintln(os.Stdout)
+				}
+				fmt.Fprintln(os.Stdout, "── Names ──")
+			}
+			output.PrintNames(os.Stdout, names[nameStart:nameEnd])
+		}
+		if end >= total {
+			break
+		}
+		fmt.Fprintf(os.Stdout, "\033[34m  ─── %d of %d ── n for more, any other key to stop ─── \033[0m", end, total)
+		if stop := readKey(); stop {
+			fmt.Fprintln(os.Stdout)
+			return nil
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+	return nil
 }
 
 // paginateNames prints names in pages of replPageSize.
-func paginateNames(items []model.Name) error {
+func paginateNames(items []model.Name) (bool, error) {
 	return paginate(len(items), func(start, end int) {
 		output.PrintNames(os.Stdout, items[start:end])
 	})
 }
 
 // paginateKanji prints kanji in pages of replPageSize.
-func paginateKanji(items []model.Kanji) error {
+func paginateKanji(items []model.Kanji) (bool, error) {
 	return paginate(len(items), func(start, end int) {
 		output.PrintKanjiList(os.Stdout, items[start:end])
 	})
 }
 
 // paginate drives page-by-page display, prompting the user after each page.
-func paginate(total int, printPage func(start, end int)) error {
+// Returns (stopped, error): stopped is true if the user pressed a key other than 'n'.
+func paginate(total int, printPage func(start, end int)) (bool, error) {
 	for offset := 0; offset < total; offset += replPageSize {
 		end := min(offset+replPageSize, total)
 		if offset > 0 {
@@ -285,11 +324,11 @@ func paginate(total int, printPage func(start, end int)) error {
 		fmt.Fprintf(os.Stdout, "\033[34m  ─── %d of %d ── n for more, any other key to stop ─── \033[0m", end, total)
 		if stop := readKey(); stop {
 			fmt.Fprintln(os.Stdout)
-			break
+			return true, nil
 		}
 		fmt.Fprintln(os.Stdout)
 	}
-	return nil
+	return false, nil
 }
 
 // readKey reads a single keypress in raw mode. Returns true if the user wants to stop.

@@ -36,10 +36,11 @@ func isJapanese(s string) bool {
 	return false
 }
 
-// isASCIILetters reports whether s contains only ASCII letters.
+// isASCIILetters reports whether s contains only ASCII letters or apostrophes.
+// Apostrophe is allowed as a Hepburn ん-separator (e.g. "ren'ai").
 func isASCIILetters(s string) bool {
 	for _, r := range s {
-		if r > 127 || !unicode.IsLetter(r) {
+		if r > 127 || (!unicode.IsLetter(r) && r != '\'') {
 			return false
 		}
 	}

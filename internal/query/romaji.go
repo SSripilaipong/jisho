@@ -29,6 +29,11 @@ func toHiragana(s string) string {
 			}
 		}
 		if !matched {
+			// Apostrophe separates ん from a following vowel/y (e.g. "ren'ai" → れんあい).
+			if runes[i] == '\'' {
+				i++
+				continue
+			}
 			// Doubled consonant (e.g. "kk", "tt") → っ + continue.
 			// "nn" is already in the map, so exclude 'n' here.
 			if i+1 < n && runes[i] == runes[i+1] && runes[i] != 'n' {

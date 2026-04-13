@@ -56,6 +56,11 @@ func TestToHiragana(t *testing.T) {
 		{"nn", "ん"},
 		// Long vowels
 		{"aa", "ああ"},
+		// Apostrophe as ん-separator
+		{"ren'ai", "れんあい"},
+		{"renai", "れない"},
+		{"shin'you", "しんよう"},
+		{"kan'i", "かんい"},
 		// Non-romaji returns empty
 		{"hello!", ""},
 	}
