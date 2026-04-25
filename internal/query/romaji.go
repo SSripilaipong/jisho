@@ -35,7 +35,7 @@ func toHiragana(s string) string {
 				continue
 			}
 			// Doubled consonant (e.g. "kk", "tt") → っ + continue.
-			// "nn" is already in the map, so exclude 'n' here.
+			// 'n' is excluded: it is handled by the single-char map entry.
 			if i+1 < n && runes[i] == runes[i+1] && runes[i] != 'n' {
 				out = append(out, []rune("っ")...)
 				i++
@@ -99,8 +99,6 @@ var romajiMap = map[string]string{
 	"tu": "つ",
 	// Long vowels / doubled consonants
 	"aa": "ああ", "ii": "いい", "uu": "うう", "ee": "ええ", "oo": "おお",
-	// n before consonant or end
-	"nn": "ん",
 
 	// Single characters
 	"a": "あ", "i": "い", "u": "う", "e": "え", "o": "お",

@@ -52,11 +52,27 @@ func TestToHiragana(t *testing.T) {
 		{"zasshi", "ざっし"},
 		{"motto", "もっと"},
 		{"kippu", "きっぷ"},
-		// nn → ん
-		{"nn", "ん"},
 		// Long vowels
 		{"aa", "ああ"},
+		// n before vowel: first n → ん (before consonant), second n starts syllable
+		{"nna", "んな"},
+		{"nni", "んに"},
+		{"nnu", "んぬ"},
+		{"nne", "んね"},
+		{"nno", "んの"},
+		// n before y compound
+		{"nnya", "んにゃ"},
+		{"nnyu", "んにゅ"},
+		{"nnyo", "んにょ"},
+		// Realistic words
+		{"shinnyo", "しんにょ"},
+		{"shinna", "しんな"},
+		{"kanna", "かんな"},
+		{"kanni", "かんに"},
+		{"sennyu", "せんにゅ"},
 		// Apostrophe as ん-separator
+		{"shina", "しな"},
+		{"shin'a", "しんあ"},
 		{"ren'ai", "れんあい"},
 		{"renai", "れない"},
 		{"shin'you", "しんよう"},
