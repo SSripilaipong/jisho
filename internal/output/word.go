@@ -71,10 +71,10 @@ func printWord(w io.Writer, word model.Word) {
 		}
 	}
 
-	// Alternate kanji forms (beyond the primary).
-	altKanji := altTexts(word.Kanji)
-	if len(altKanji) > 0 {
-		fmt.Fprintf(w, "  %s %s\n", dim(w, "also:"), strings.Join(altKanji, "、"))
+	// Alternate forms (all valid kanji+kana pairs beyond the primary).
+	alts := buildAltForms(word.Kanji, word.Kana)
+	if len(alts) > 0 {
+		fmt.Fprintf(w, "  %s %s\n", dim(w, "also:"), strings.Join(alts, "、"))
 	}
 }
 
@@ -92,13 +92,46 @@ func primaryKanaText(forms []model.KanaForm) string {
 	return forms[0].Text
 }
 
-func altTexts(forms []model.KanjiForm) []string {
-	if len(forms) <= 1 {
-		return nil
+func kanaApplies(appliesToKanji []string, kanjiText string) bool {
+	if len(appliesToKanji) == 0 {
+		return true
 	}
-	out := make([]string, len(forms)-1)
-	for i, f := range forms[1:] {
-		out[i] = f.Text
+	for _, k := range appliesToKanji {
+		if k == "*" || k == kanjiText {
+			return true
+		}
+	}
+	return false
+}
+
+func buildAltForms(kanji []model.KanjiForm, kana []model.KanaForm) []string {
+	if len(kanji) == 0 {
+		if len(kana) <= 1 {
+			return nil
+		}
+		out := make([]string, len(kana)-1)
+		for i, f := range kana[1:] {
+			out[i] = f.Text
+		}
+		return out
+	}
+
+	primaryKanji := kanji[0].Text
+	primaryKana := ""
+	if len(kana) > 0 {
+		primaryKana = kana[0].Text
+	}
+
+	var out []string
+	for _, k := range kanji {
+		for _, n := range kana {
+			if k.Text == primaryKanji && n.Text == primaryKana {
+				continue
+			}
+			if kanaApplies(n.AppliesToKanji, k.Text) {
+				out = append(out, k.Text+" 【"+n.Text+"】")
+			}
+		}
 	}
 	return out
 }
