@@ -108,7 +108,7 @@ func (q *querier) searchWordsByGloss(ctx context.Context, ftsQuery string, opts 
 		WHERE words_fts MATCH ?
 		  AND (? = 0 OR w.jlpt_level = ?)
 		  AND (? = 0 OR w.is_common = 1)
-		ORDER BY w.is_common DESC, f.rank, w.freq_rank ASC NULLS LAST
+		ORDER BY w.is_common DESC, w.freq_rank ASC NULLS LAST, f.rank
 		LIMIT 50`
 	jlpt := opts.JLPTLevel
 	common := boolInt(opts.CommonOnly)
