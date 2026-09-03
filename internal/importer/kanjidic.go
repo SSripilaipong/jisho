@@ -73,23 +73,21 @@ func (KanjidicImporter) Import(ctx context.Context, db *sql.DB, r io.Reader, siz
 			return fmt.Errorf("kanjidic decode: %w", err)
 		}
 
-		var onR, kunR []string
+		var onR, kunR, meansEN []string
 		if c.ReadingMeaning != nil {
-			for _, rd := range c.ReadingMeaning.Readings {
-				switch rd.Type {
-				case "ja_on":
-					onR = append(onR, rd.Value)
-				case "ja_kun":
-					kunR = append(kunR, rd.Value)
+			for _, g := range c.ReadingMeaning.Groups {
+				for _, rd := range g.Readings {
+					switch rd.Type {
+					case "ja_on":
+						onR = appendUnique(onR, rd.Value)
+					case "ja_kun":
+						kunR = appendUnique(kunR, rd.Value)
+					}
 				}
-			}
-		}
-
-		var meansEN []string
-		if c.ReadingMeaning != nil {
-			for _, m := range c.ReadingMeaning.Meanings {
-				if m.Lang == "en" {
-					meansEN = append(meansEN, m.Value)
+				for _, m := range g.Meanings {
+					if m.Lang == "en" {
+						meansEN = appendUnique(meansEN, m.Value)
+					}
 				}
 			}
 		}
@@ -174,10 +172,17 @@ type kanjidicRadical struct {
 	Value int    `json:"value"`
 }
 
+// kanjidicRM holds the readingMeaning block. Readings and meanings are nested
+// one level deeper, inside groups — a character with several unrelated
+// on/kun+meaning sets gets one group per set.
 type kanjidicRM struct {
+	Groups []kanjidicRMGroup `json:"groups"`
+	Nanori []string          `json:"nanori"`
+}
+
+type kanjidicRMGroup struct {
 	Readings []kanjidicReading `json:"readings"`
 	Meanings []kanjidicMeaning `json:"meanings"`
-	Nanori   []string          `json:"nanori"`
 }
 
 type kanjidicReading struct {
@@ -188,4 +193,14 @@ type kanjidicReading struct {
 type kanjidicMeaning struct {
 	Lang  string `json:"lang"`
 	Value string `json:"value"`
+}
+
+// appendUnique appends v to s unless it is already present, preserving order.
+func appendUnique(s []string, v string) []string {
+	for _, existing := range s {
+		if existing == v {
+			return s
+		}
+	}
+	return append(s, v)
 }
