@@ -16,6 +16,7 @@ type testWord struct {
 	isCommon bool
 	jlpt     int
 	isKana   bool
+	freqRank int // 0 = no priority marker in JMdict (stored as NULL)
 }
 
 func newTestQuerier(t *testing.T, words []testWord) Querier {
@@ -35,9 +36,13 @@ func newTestQuerier(t *testing.T, words []testWord) Querier {
 		if w.jlpt > 0 {
 			jlpt = w.jlpt
 		}
+		var freqRank any
+		if w.freqRank > 0 {
+			freqRank = w.freqRank
+		}
 		if _, err := db.Exec(
-			`INSERT INTO words(id, kanji_json, kana_json, sense_json, gloss_en, is_common, jlpt_level)
-			 VALUES (?, '[]', '[]', '[]', '', ?, ?)`, w.id, common, jlpt); err != nil {
+			`INSERT INTO words(id, kanji_json, kana_json, sense_json, gloss_en, is_common, jlpt_level, freq_rank)
+			 VALUES (?, '[]', '[]', '[]', '', ?, ?, ?)`, w.id, common, jlpt, freqRank); err != nil {
 			t.Fatal(err)
 		}
 		kana := 0
@@ -106,5 +111,20 @@ func TestSearchWordsOrderingSuffix(t *testing.T) {
 	want := []string{"exact", "long"}
 	if got := idsOf(t, q, "*食べる"); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("suffix search = %v, want %v", got, want)
+	}
+}
+
+func TestSearchWordsOrderingFrequencyBeatsLength(t *testing.T) {
+	// The 食料品 / 食料 shape from jisho.org: the longer form is the more
+	// frequent one, so frequency must outrank the length tie-break.
+	q := newTestQuerier(t, []testWord{
+		{id: "short-unranked", form: "食料", isCommon: true},
+		{id: "long-ranked", form: "食料品", isCommon: true, freqRank: 16},
+		{id: "short-ranked", form: "食堂", isCommon: true, freqRank: 5},
+	})
+
+	want := []string{"short-ranked", "long-ranked", "short-unranked"}
+	if got := idsOf(t, q, "食"); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("prefix search = %v, want %v", got, want)
 	}
 }

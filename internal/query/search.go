@@ -69,13 +69,15 @@ func (q *querier) searchWordsByForm(ctx context.Context, pattern, exact string, 
 // rankOrder builds the shared ORDER BY for form searches. exactExpr is an
 // aggregate yielding 1 when one of the matched forms equals the query.
 //
-// JMdict carries no word frequency — is_common is a plain boolean (see
-// internal/importer/jmdict.go) — so within a bucket we rank by how closely the
-// form matches: an exact hit first, then the shortest form, so that 食べる is
-// not buried under the long compounds that share its prefix.
+// An exact hit always leads. Below that, freq_rank orders the common bucket by
+// real corpus frequency (see internal/importer/jmdict_priority.go); it is NULL
+// for the long tail JMdict gives no priority marker, which then falls back to
+// the shortest matched form so that 食べる is not buried under the compounds
+// sharing its prefix.
 func rankOrder(exactExpr string) string {
 	return exactExpr + ` DESC,
 		         w.is_common DESC,
+		         w.freq_rank ASC NULLS LAST,
 		         MIN(LENGTH(wf.form)) ASC,
 		         w.jlpt_level ASC NULLS LAST`
 }
@@ -106,7 +108,7 @@ func (q *querier) searchWordsByGloss(ctx context.Context, ftsQuery string, opts 
 		WHERE words_fts MATCH ?
 		  AND (? = 0 OR w.jlpt_level = ?)
 		  AND (? = 0 OR w.is_common = 1)
-		ORDER BY w.is_common DESC, f.rank
+		ORDER BY w.is_common DESC, f.rank, w.freq_rank ASC NULLS LAST
 		LIMIT 50`
 	jlpt := opts.JLPTLevel
 	common := boolInt(opts.CommonOnly)

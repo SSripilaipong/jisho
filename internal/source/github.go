@@ -65,6 +65,31 @@ func (f *GithubFetcher) LatestRelease() (*Release, error) {
 	return rel, nil
 }
 
+// RemoteVersion reports a version string for a plain file URL, taken from its
+// Last-Modified header. Used for sources that have no release metadata.
+func (f *GithubFetcher) RemoteVersion(url string) (string, error) {
+	req, err := http.NewRequest("HEAD", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("head %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("head %s returned %d", url, resp.StatusCode)
+	}
+	v := resp.Header.Get("Last-Modified")
+	if v == "" {
+		return "", fmt.Errorf("head %s: no Last-Modified header", url)
+	}
+	return v, nil
+}
+
 func (f *GithubFetcher) Download(url string, dest io.Writer, progress func(int64, int64)) error {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

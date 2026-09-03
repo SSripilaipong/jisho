@@ -14,7 +14,8 @@ var migrations = []string{
 		sense_json TEXT NOT NULL DEFAULT '[]',
 		gloss_en   TEXT NOT NULL DEFAULT '',
 		is_common  INTEGER NOT NULL DEFAULT 0,
-		jlpt_level INTEGER
+		jlpt_level INTEGER,
+		freq_rank  INTEGER
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS word_forms (
@@ -80,4 +81,12 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_kanji_radicals_radical ON kanji_radicals(radical)`,
 	`CREATE INDEX IF NOT EXISTS idx_words_jlpt             ON words(jlpt_level)`,
 	`CREATE INDEX IF NOT EXISTS idx_words_common           ON words(is_common)`,
+	`CREATE INDEX IF NOT EXISTS idx_words_freq_rank        ON words(freq_rank)`,
+}
+
+// addedColumns are columns introduced after the initial schema. CREATE TABLE
+// statements above only apply to a fresh database, so existing ones are patched
+// here; adding a column that is already present is a no-op.
+var addedColumns = []struct{ table, column, decl string }{
+	{"words", "freq_rank", "INTEGER"},
 }

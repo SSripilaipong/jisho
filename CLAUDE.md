@@ -33,14 +33,39 @@ Japanese/kana/romaji queries go through the `word_forms` table (B-tree LIKE), **
 - `*tabe` (romaji suffix) → convert to kana, reverse → `form_rev LIKE 'べた%' OR form_rev LIKE 'ベタ%'` (`is_kana = 1`)
 - English → `words_fts MATCH 'query*'` (FTS5 prefix, matches "to eat" and "eatery" for "eat")
 
+## Result ordering
+
+Form searches share one ORDER BY, built by `rankOrder` in `internal/query/search.go`:
+exact form match, then `is_common`, then `freq_rank` (ASC, NULLS last), then the
+shortest matched form, then `jlpt_level`. English gloss search orders by `is_common`,
+FTS5 `rank`, then `freq_rank`.
+
+`freq_rank` is the JMdict news-frequency band (`nf01`–`nf48`), with 50/60 for entries
+carrying only a primary/secondary priority marker and NULL for the unranked tail. It
+comes from the original JMdict XML, not jmdict-simplified, which discards the
+`ke_pri`/`re_pri` fields — see `internal/importer/jmdict_priority.go`.
+
 ## Database
 
 SQLite via `modernc.org/sqlite` (pure Go, no CGo). The only SQL trigger is the FTS sync trigger (`words_ai`) — no business logic in SQL.
 
 Key tables: `words`, `word_forms` (one row per kanji/kana form), `words_fts` (English gloss FTS), `names`, `name_forms`, `kanji`, `kanji_radicals`, `source_meta`.
 
+Columns added after the initial schema go in `addedColumns` (`internal/db/migrations.go`)
+as well as the CREATE TABLE, since `Migrate` also runs against existing databases.
+
 DB path resolution order: `--db` flag → `$JISHO_DB` → `$XDG_DATA_HOME/jisho/jisho.db` → `~/.local/share/jisho/jisho.db`.
 
 ## Update command
 
 `jisho update` downloads assets from the jmdict-simplified GitHub release, writes to `jisho.db.tmp`, then atomically renames to `jisho.db`. The rename is the commit point — an interrupted import never corrupts the live DB.
+
+## Data sources
+
+- [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) — JMdict, JMnedict,
+  Kanjidic2 and KRADFILE, as JSON. Everything except `words.freq_rank`.
+- [JMdict](https://www.edrdg.org/pub/Nihongo/JMdict_e.gz) (EDRDG) — the original XML,
+  read only for the `ke_pri`/`re_pri` priority markers behind `freq_rank`.
+
+Both derive from the JMdict/EDICT and KANJIDIC projects of the Electronic Dictionary
+Research and Development Group, used under CC BY-SA.

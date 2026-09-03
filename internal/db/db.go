@@ -38,6 +38,44 @@ func Migrate(db *sql.DB) error {
 			return fmt.Errorf("migration failed: %w\nSQL: %s", err, stmt)
 		}
 	}
+	for _, c := range addedColumns {
+		if err := addColumnIfMissing(db, c.table, c.column, c.decl); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// addColumnIfMissing adds a column to an existing table, doing nothing if it is
+// already there. SQLite has no "ADD COLUMN IF NOT EXISTS", so check first.
+func addColumnIfMissing(db *sql.DB, table, column, decl string) error {
+	rows, err := db.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return fmt.Errorf("inspect %s: %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid          int
+			name, ctype  string
+			notNull, pk  int
+			defaultValue sql.NullString
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("inspect %s: %w", table, err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("inspect %s: %w", table, err)
+	}
+
+	stmt := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, decl)
+	if _, err := db.Exec(stmt); err != nil {
+		return fmt.Errorf("migration failed: %w\nSQL: %s", err, stmt)
+	}
 	return nil
 }
 

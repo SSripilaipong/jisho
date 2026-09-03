@@ -3,6 +3,7 @@ package cmd
 import (
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
@@ -18,6 +19,11 @@ import (
 	"github.com/shsnail/jisho/internal/importer"
 	"github.com/shsnail/jisho/internal/source"
 )
+
+// jmdictXMLURL is the original JMdict, which — unlike the jmdict-simplified
+// build — still carries the ke_pri/re_pri priority markers behind freq_rank.
+// It is published on its own, outside the GitHub release.
+const jmdictXMLURL = "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz"
 
 var forceUpdate bool
 
@@ -60,9 +66,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Latest version: %s\n", rel.Version)
 
-	// Check current version in DB (if it exists).
+	// Check current versions in DB (if it exists). JMdict XML is versioned by
+	// its Last-Modified header; a change in either source triggers a rebuild.
 	if !forceUpdate {
-		if current, err := currentVersion(resolveDBPath()); err == nil && current == rel.Version {
+		current, err := currentVersion(resolveDBPath(), "jmdict_version")
+		currentPriority, priorityErr := currentVersion(resolveDBPath(), "jmdict_priority_version")
+		remotePriority, remoteErr := fetcher.RemoteVersion(jmdictXMLURL)
+		priorityCurrent := priorityErr == nil && remoteErr == nil && currentPriority == remotePriority
+		if err == nil && current == rel.Version && priorityCurrent {
 			fmt.Println("Already up to date.")
 			return nil
 		}
@@ -116,6 +127,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		bar.Finish()
 	}
 
+	// Frequency ranking is a nice-to-have: without it search still works, just
+	// ordered less well, so a failure here must not sink the whole update.
+	if err := importJMdictPriority(ctx, fetcher, tmpDB); err != nil {
+		fmt.Printf("\n  WARNING: could not import frequency ranking (%v).\n", err)
+		fmt.Println("  Search results will be ordered without it.")
+	}
+
 	if err := jishodb.RestoreDefaultPragmas(tmpDB); err != nil {
 		return fmt.Errorf("restore pragmas: %w", err)
 	}
@@ -139,6 +157,48 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Database updated to %s at %s\n", rel.Version, finalPath)
+	return nil
+}
+
+// importJMdictPriority downloads the original JMdict XML and records the
+// per-entry frequency rank. It runs after the JMdict import, since it updates
+// word rows that must already exist.
+func importJMdictPriority(ctx context.Context, fetcher source.Fetcher, db *sql.DB) error {
+	fmt.Println("\nDownloading JMdict priority data (JMdict_e.gz)…")
+	// Size -1 renders a spinner: there is no release metadata to read it from,
+	// and the importer records the version itself from the file header.
+	asset := &source.Asset{Name: "JMdict_e.gz", DownloadURL: jmdictXMLURL, Size: -1}
+	data, err := downloadToMemory(ctx, fetcher, asset)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Importing frequency ranking…")
+	// The bar tracks the compressed bytes, since the decompressed size is
+	// unknown until the whole stream has been read.
+	bar := progressbar.DefaultBytes(int64(len(data)), "  importing")
+	reader := progressbar.NewReader(bytes.NewReader(data), bar)
+	gz, err := gzip.NewReader(&reader)
+	if err != nil {
+		bar.Finish()
+		return fmt.Errorf("open gzip: %w", err)
+	}
+	defer gz.Close()
+
+	err = importer.JMdictPriorityImporter{}.Import(ctx, db, gz, 0, nil)
+	bar.Finish()
+	if err != nil {
+		return err
+	}
+
+	var ranked int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM words WHERE freq_rank IS NOT NULL`).Scan(&ranked); err != nil {
+		return err
+	}
+	if ranked == 0 {
+		return fmt.Errorf("no entries were ranked")
+	}
+	fmt.Printf("\nRanked %d words by frequency.\n", ranked)
 	return nil
 }
 
@@ -189,8 +249,8 @@ func findAsset(assets []source.Asset, prefix, suffix string) *source.Asset {
 	return nil
 }
 
-// currentVersion reads jmdict_version from the existing database, if any.
-func currentVersion(path string) (string, error) {
+// currentVersion reads a source_meta value from the existing database, if any.
+func currentVersion(path, key string) (string, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "", err
 	}
@@ -200,6 +260,6 @@ func currentVersion(path string) (string, error) {
 	}
 	defer d.Close()
 	var v string
-	err = d.QueryRow(`SELECT value FROM source_meta WHERE key='jmdict_version'`).Scan(&v)
+	err = d.QueryRow(`SELECT value FROM source_meta WHERE key=?`, key).Scan(&v)
 	return v, err
 }
