@@ -45,6 +45,8 @@ var wantedAssets = []assetSpec{
 	{prefix: "jmdict-eng-", suffix: ".json.zip", importerF: func() importer.Importer { return importer.JMdictImporter{} }, label: "JMdict (words)"},
 	{prefix: "jmnedict-all-", suffix: ".json.zip", importerF: func() importer.Importer { return importer.JMnedictImporter{} }, label: "JMnedict (names)"},
 	{prefix: "kanjidic2-en-", suffix: ".json.zip", importerF: func() importer.Importer { return importer.KanjidicImporter{} }, label: "Kanjidic2"},
+	// Must come after Kanjidic2: kanji_radicals has a foreign key on kanji(literal).
+	{prefix: "kradfile-", suffix: ".json.zip", importerF: func() importer.Importer { return importer.KradfileImporter{} }, label: "KRADFILE (radicals)"},
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {

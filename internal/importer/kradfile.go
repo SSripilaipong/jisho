@@ -33,13 +33,16 @@ func (KradfileImporter) Import(ctx context.Context, db *sql.DB, r io.Reader, siz
 	}
 
 	b := newBatcher(db, 1000, func(tx *sql.Tx, rows []radRow) error {
-		stmt, err := tx.Prepare(`INSERT OR IGNORE INTO kanji_radicals(literal, radical) VALUES (?,?)`)
+		// KRADFILE covers a few characters Kanjidic2 does not. OR IGNORE does not
+		// suppress foreign key violations, so skip rows with no kanji row.
+		stmt, err := tx.Prepare(`INSERT OR IGNORE INTO kanji_radicals(literal, radical)
+			SELECT ?, ? WHERE EXISTS (SELECT 1 FROM kanji WHERE literal = ?)`)
 		if err != nil {
 			return err
 		}
 		defer stmt.Close()
 		for _, row := range rows {
-			if _, err := stmt.Exec(row.literal, row.radical); err != nil {
+			if _, err := stmt.Exec(row.literal, row.radical, row.literal); err != nil {
 				return fmt.Errorf("insert radical %q/%q: %w", row.literal, row.radical, err)
 			}
 		}
