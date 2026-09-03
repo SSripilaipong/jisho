@@ -38,7 +38,7 @@ Japanese/kana/romaji queries go through the `word_forms` table (B-tree LIKE), **
 Form searches share one ORDER BY, built by `rankOrder` in `internal/query/search.go`:
 exact form match, then `is_common`, then `freq_rank` (ASC, NULLS last), then the
 shortest matched form, then `jlpt_level`. English gloss search orders by `is_common`,
-`freq_rank`, then FTS5 `rank`.
+FTS5 `rank`, then `freq_rank`.
 
 `freq_rank` is the JMdict news-frequency band (`nf01`–`nf48`), with 50/60 for entries
 carrying only a primary/secondary priority marker and NULL for the unranked tail. It
