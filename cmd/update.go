@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,7 +30,7 @@ var forceUpdate bool
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Download and import the latest jmdict-simplified data",
+	Short: "Download and import Japanese dictionaries and English-to-Thai data",
 	RunE:  runUpdate,
 }
 
@@ -56,6 +57,22 @@ var wantedAssets = []assetSpec{
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
+	// Each store commits independently. A failure in one source must not stop
+	// the other from updating, and an up-to-date Japanese store still checks Thai.
+	var errs []error
+	if err := runJapaneseUpdate(cmd, args); err != nil {
+		errs = append(errs, fmt.Errorf("Japanese update: %w", err))
+	}
+	if err := cmd.Context().Err(); err != nil {
+		return errors.Join(append(errs, err)...)
+	}
+	if err := updateThai(cmd, ""); err != nil {
+		errs = append(errs, fmt.Errorf("EN→TH update: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+func runJapaneseUpdate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	fetcher := source.NewGithubFetcher()
 
@@ -74,7 +91,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		remotePriority, remoteErr := fetcher.RemoteVersion(jmdictXMLURL)
 		priorityCurrent := priorityErr == nil && remoteErr == nil && currentPriority == remotePriority
 		if err == nil && current == rel.Version && priorityCurrent {
-			fmt.Println("Already up to date.")
+			fmt.Println("Japanese dictionaries already up to date.")
 			return nil
 		}
 	}

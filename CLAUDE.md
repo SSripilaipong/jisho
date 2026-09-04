@@ -60,6 +60,20 @@ DB path resolution order: `--db` flag → `$JISHO_DB` → `$XDG_DATA_HOME/jisho/
 
 `jisho update` downloads assets from the jmdict-simplified GitHub release, writes to `jisho.db.tmp`, then atomically renames to `jisho.db`. The rename is the commit point — an interrupted import never corrupts the live DB.
 
+The same command also downloads and imports NECTEC's LEXiTRON English-to-Thai
+data into the sibling `jisho-en-th.db`, even when Japanese data is already current.
+The stores commit independently; failure in either is reported while the other
+is still attempted (unless cancelled). `jisho update-th` is a Thai-only refresh,
+with `--file` for an existing official ZIP archive. Thai schema is in
+`internal/db/thai.go`; the archive's licenses and checksum are stored in `source_meta`.
+
+## Interactive interfaces
+
+Bare `jisho` and `jisho repl` run the full-screen Bubble Tea TUI. Its result
+document keeps English glosses as structured selectable fields so wrapping never
+joins separate definitions. `jisho repl-classic` retains the old Readline REPL
+as a fallback. Keep fixes shared through the query/model layers where possible.
+
 ## Data sources
 
 - [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) — JMdict, JMnedict,

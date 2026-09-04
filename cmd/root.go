@@ -26,8 +26,8 @@ var rootCmd = &cobra.Command{
 		return cmd.Help()
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// update command opens its own DB, skip here.
-		if cmd.Name() == "update" {
+		// These commands manage their own stores and also work without JMdict.
+		if cmd.Name() == "update" || cmd.Name() == "update-th" || cmd.Name() == "th" {
 			return nil
 		}
 		return openDB()
